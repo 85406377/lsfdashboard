@@ -4,7 +4,10 @@
 <img width="1577" height="946" alt="jobs" src="https://github.com/user-attachments/assets/338b9928-1687-48a9-8f11-556f40da566d" />
 <img width="1575" height="843" alt="jobdetail" src="https://github.com/user-attachments/assets/4e56f34b-9882-449d-91f5-75c5218d9250" />
 
-一个基于 Python + Vue + PyECharts 的 IBM LSF 作业监控系统。在LSF 主机或者节点机上运行，用系统用户和密码验证登录，用户可查看，管理个人的jobs。管理可管理全部人员Jobs。
+一个基于 Python + Vue + PyECharts 的 IBM LSF 作业监控系统。在LSF 主机或者节点机上运行，用系统用户和密码验证登录，用户可查看，管理个人的jobs。管理员admin可管理全部人员Jobs。
+管理员帐号：
+用户名: admin
+密码: admin
 
 ## 功能特性
 
