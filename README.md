@@ -1,6 +1,9 @@
 # IBM LSF 作业监控 Dashboard
-
-一个基于 Python + Vue + PyECharts 的 IBM LSF 作业监控系统。
+一个基于 Python + Vue + PyECharts 的 IBM LSF 作业监控系统。在LSF 主机或者节点机上运行，用系统用户和密码验证登录，用户可查看，管理个人的jobs。管理员admin可管理全部人员Jobs。 管理员帐号： 用户名: admin 密码: admin123
+<img width="467" height="563" alt="1" src="https://github.com/user-attachments/assets/fefdb849-e002-44da-bdbe-3077126b680b" />
+<img width="840" height="492" alt="2" src="https://github.com/user-attachments/assets/41db20a6-61d1-407b-a27c-23d78f208ce9" />
+<img width="849" height="508" alt="3" src="https://github.com/user-attachments/assets/241d3351-b4de-4b45-9021-e673af0d3e7f" />
+<img width="835" height="449" alt="4" src="https://github.com/user-attachments/assets/28492a51-2b64-41ed-a566-b73df35f42bf" />
 
 ## 功能特性
 
