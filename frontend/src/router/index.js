@@ -1,61 +1,23 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import Dashboard from '../views/Dashboard.vue'
-import JobsList from '../views/JobsList.vue'
 import JobDetail from '../views/JobDetail.vue'
-import AdminLayout from '../views/AdminLayout.vue'
-import AdminProfile from '../views/AdminProfile.vue'
-import HistoryList from '../views/HistoryList.vue'
-import HistoryDetail from '../views/HistoryDetail.vue'
 import Login from '../views/Login.vue'
+import Profile from '../views/Profile.vue'
+import JobsList from '../views/JobsList.vue'
+import HistoryJobs from '../views/HistoryJobs.vue'
 
 const routes = [
   {
     path: '/',
     name: 'Dashboard',
-    component: Dashboard
-  },
-  {
-    path: '/jobs',
-    name: 'JobsList',
-    component: JobsList
-  },
-  {
-    path: '/hist',
-    name: 'HistoryList',
-    component: HistoryList
-  },
-  {
-    path: '/hist/:bid',
-    name: 'HistoryDetail',
-    component: HistoryDetail
+    component: Dashboard,
+    meta: { requiresAuth: true }
   },
   {
     path: '/job/:jobId',
     name: 'JobDetail',
-    component: JobDetail
-  },
-  {
-    path: '/admin',
-    name: 'Admin',
-    component: AdminLayout,
-    redirect: '/admin/profile',
-    children: [
-      {
-        path: 'profile',
-        name: 'AdminProfile',
-        component: AdminProfile
-      },
-      {
-        path: 'history',
-        name: 'HistoryList',
-        component: HistoryList
-      },
-      {
-        path: 'history/:bid',
-        name: 'HistoryDetail',
-        component: HistoryDetail
-      }
-    ]
+    component: JobDetail,
+    meta: { requiresAuth: true }
   },
   {
     path: '/login',
@@ -63,9 +25,22 @@ const routes = [
     component: Login
   },
   {
-    path: '/auth',
-    name: 'Auth',
-    component: Login
+    path: '/profile',
+    name: 'Profile',
+    component: Profile,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/jobs',
+    name: 'JobsList',
+    component: JobsList,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/hist',
+    name: 'HistoryJobs',
+    component: HistoryJobs,
+    meta: { requiresAuth: true }
   }
 ]
 
@@ -74,20 +49,24 @@ const router = createRouter({
   routes
 })
 
-// 路由守卫 - 所有路由都需要认证（除了 login）
-router.beforeEach((to, from, next) => {
-  if (to.path === '/login') {
-    next()
-  } else {
-    // 检查 localStorage 中的登录状态
-    const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true'
+// 路由守卫
+router.beforeEach(async (to, from, next) => {
+  try {
+    const res = await fetch('/api/check-login')
+    const data = await res.json()
+    const isLoggedIn = data.success
     
-    if (!isLoggedIn) {
-      // 未登录，重定向到登录页，并保存原路径
-      next({
-        path: '/login',
-        query: { next: to.fullPath }
-      })
+    if (to.meta.requiresAuth && !isLoggedIn) {
+      next('/login')
+    } else if (to.path === '/login' && isLoggedIn) {
+      next('/')
+    } else {
+      next()
+    }
+  } catch (error) {
+    console.error('检查登录状态失败:', error)
+    if (to.meta.requiresAuth) {
+      next('/login')
     } else {
       next()
     }

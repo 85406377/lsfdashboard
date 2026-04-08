@@ -1,56 +1,45 @@
 <template>
   <div id="app">
-    <Navbar v-if="!showingLogin" />
+    <!-- Logo 显示在登录页面外所有页面 -->
+    <div v-if="showLogo" class="global-logo">
+      <router-link to="/" class="logo-link">
+        <img v-if="hasLogo" :src="logoUrl" alt="企业Logo" class="logo-img">
+        <span v-else class="logo-text">LSF Dashboard</span>
+      </router-link>
+    </div>
     <router-view />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import Navbar from './components/Navbar.vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import axios from 'axios'
 
-const showingLogin = ref(false)
+const route = useRoute()
+const hasLogo = ref(false)
+const logoUrl = ref('/logo.png')
 
-axios.defaults.withCredentials = true
-
-onMounted(async () => {
-  // 检查是否已经在登录页面
-  const currentPath = window.location.pathname
-  if (currentPath === '/login') {
-    showingLogin.value = true
-  }
-  
-  // 检查认证状态
-  try {
-    const response = await axios.get('/api/auth-status')
-    if (!response.data.authenticated && currentPath !== '/login') {
-      showingLogin.value = true
-    }
-  } catch (err) {
-    console.error('Auth check failed:', err)
-  }
+// 不在登录页面显示Logo
+const showLogo = computed(() => {
+  return route.path !== '/login'
 })
 
-// 监听路由变化
-if (typeof window !== 'undefined') {
-  window.addEventListener('popstate', async () => {
-    const path = window.location.pathname
-    showingLogin.value = path === '/login'
-    
-    // 如果没有认证，且不在 login 页面，重定向到 login
-    try {
-      const response = await axios.get('/api/auth-status')
-      if (!response.data.authenticated && path !== '/login') {
-        showingLogin.value = true
-      }
-    } catch (err) {
-      if (path !== '/login') {
-        showingLogin.value = true
-      }
+const checkLogo = async () => {
+  try {
+    const res = await axios.get('/api/get-logo')
+    if (res.data.success) {
+      hasLogo.value = res.data.hasLogo
+      logoUrl.value = '/logo.png'
     }
-  })
+  } catch (err) {
+    console.error('检查Logo失败:', err)
+  }
 }
+
+onMounted(() => {
+  checkLogo()
+})
 </script>
 
 <style>
@@ -70,5 +59,35 @@ body {
 #app {
   width: 100%;
   min-height: 100vh;
+}
+
+.global-logo {
+  position: fixed;
+  top: 15px;
+  left: 20px;
+  z-index: 1000;
+}
+
+.logo-link {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.logo-img {
+  max-height: 50px;
+  max-width: 150px;
+  object-fit: contain;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 8px 16px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.logo-text {
+  font-size: 20px;
+  font-weight: bold;
+  color: white;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 </style>
