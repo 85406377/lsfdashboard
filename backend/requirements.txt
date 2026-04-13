@@ -1,3 +1,13 @@
-# Python 依赖
-Flask
-Flask-CORS
+# Flask Web 框架
+Flask>=2.0
+
+# 跨域资源共享（CORS）支持
+Flask-Cors>=3.0
+
+# 用于系统用户验证的可选依赖（如果您使用 pam 进行验证）
+# pam   # 如需使用，请自行 `pip install python-pam` 并在服务器上确保 PAM 可用
+
+# 用于通过 sshpass 调用 ssh 的依赖（如果系统中使用了该方案）
+# sshpass   # 仅在实际使用时才需要，通常通过系统包管理器安装
+
+# 其它标准库（sqlite3、hashlib、subprocess、datetime 等）已随 Python 本身提供，无需额外写入
