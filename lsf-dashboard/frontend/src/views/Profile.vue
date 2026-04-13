@@ -5,15 +5,15 @@
         <h1>👤 个人信息管理</h1>
         <p>管理您的账户密码和企业Logo</p>
       </div>
-      
+
       <div class="profile-sections">
-        <!-- 修改密码 -->
-        <div class="profile-card">
+        <!-- 修改密码 (仅admin可见) -->
+        <div class="profile-card" v-if="isAdmin">
           <div class="card-title">
             <span class="icon">🔐</span>
             <h3>修改管理密码</h3>
           </div>
-          
+
           <div class="form-group">
             <label for="oldPassword">原密码</label>
             <input
@@ -23,7 +23,7 @@
               placeholder="请输入原密码"
             />
           </div>
-          
+
           <div class="form-group">
             <label for="newPassword">新密码</label>
             <input
@@ -33,7 +33,7 @@
               placeholder="请输入新密码"
             />
           </div>
-          
+
           <div class="form-group">
             <label for="confirmPassword">确认新密码</label>
             <input
@@ -43,23 +43,23 @@
               placeholder="请再次输入新密码"
             />
           </div>
-          
+
           <button @click="changePassword" class="btn-primary" :disabled="passwordLoading">
             {{ passwordLoading ? '修改中...' : '修改密码' }}
           </button>
-          
+
           <div v-if="passwordMessage" :class="['message', passwordSuccess ? 'success' : 'error']">
             {{ passwordMessage }}
           </div>
         </div>
-        
-        <!-- 上传Logo -->
-        <div class="profile-card">
+
+        <!-- 上传Logo (仅admin可见) -->
+        <div class="profile-card" v-if="isAdmin">
           <div class="card-title">
             <span class="icon">🏢</span>
             <h3>企业Logo设置</h3>
           </div>
-          
+
           <div class="logo-preview">
             <p class="preview-label">当前Logo</p>
             <div class="logo-box">
@@ -67,7 +67,7 @@
               <div v-else class="no-logo">暂无Logo</div>
             </div>
           </div>
-          
+
           <div class="form-group">
             <label for="logoFile">上传新Logo</label>
             <input
@@ -79,17 +79,40 @@
             />
             <p class="file-hint">支持格式: PNG, JPG, JPEG, GIF, SVG, WebP</p>
           </div>
-          
+
           <button @click="uploadLogo" class="btn-primary" :disabled="logoLoading || !selectedFile">
             {{ logoLoading ? '上传中...' : '上传Logo' }}
           </button>
-          
+
           <div v-if="logoMessage" :class="['message', logoSuccess ? 'success' : 'error']">
             {{ logoMessage }}
           </div>
         </div>
+
+        <!-- 普通用户信息 (仅普通用户可见) -->
+        <div class="profile-card" v-if="!isAdmin">
+          <div class="card-title">
+            <span class="icon">👤</span>
+            <h3>用户信息</h3>
+          </div>
+
+          <div class="user-info-box">
+            <p class="info-item">
+              <span class="label">用户名:</span>
+              <span class="value">{{ username }}</span>
+            </p>
+            <p class="info-item">
+              <span class="label">角色:</span>
+              <span class="value">普通用户</span>
+            </p>
+            <p class="info-item">
+              <span class="label">权限:</span>
+              <span class="value">仅查看自己的作业</span>
+            </p>
+          </div>
+        </div>
       </div>
-      
+
       <div class="profile-footer">
         <router-link to="/" class="back-link">← 返回首页</router-link>
         <button @click="logout" class="btn-logout">退出登录</button>
@@ -104,6 +127,8 @@ import { useRouter } from 'vue-router'
 import axios from 'axios'
 
 const router = useRouter()
+const isAdmin = ref(false)
+const username = ref('')
 
 // 密码修改相关
 const oldPassword = ref('')
@@ -121,6 +146,18 @@ const logoLoading = ref(false)
 const logoMessage = ref('')
 const logoSuccess = ref(false)
 const logoInput = ref(null)
+
+const checkLogin = async () => {
+  try {
+    const res = await axios.get('/api/check-login')
+    if (res.data.success) {
+      isAdmin.value = res.data.role === 'admin'
+      username.value = res.data.user || '用户'
+    }
+  } catch (err) {
+    console.error('检查登录状态失败:', err)
+  }
+}
 
 const checkLogo = async () => {
   try {
@@ -148,28 +185,28 @@ const changePassword = async () => {
     passwordSuccess.value = false
     return
   }
-  
+
   if (newPassword.value !== confirmPassword.value) {
     passwordMessage.value = '两次输入的新密码不一致'
     passwordSuccess.value = false
     return
   }
-  
+
   if (newPassword.value.length < 6) {
     passwordMessage.value = '新密码长度不能少于6位'
     passwordSuccess.value = false
     return
   }
-  
+
   passwordLoading.value = true
   passwordMessage.value = ''
-  
+
   try {
     const res = await axios.post('/api/change-password', {
       oldPassword: oldPassword.value,
       newPassword: newPassword.value
     })
-    
+
     if (res.data.success) {
       passwordMessage.value = '密码修改成功！'
       passwordSuccess.value = true
@@ -195,20 +232,20 @@ const uploadLogo = async () => {
     logoSuccess.value = false
     return
   }
-  
+
   logoLoading.value = true
   logoMessage.value = ''
-  
+
   const formData = new FormData()
   formData.append('file', selectedFile.value)
-  
+
   try {
     const res = await axios.post('/api/upload-logo', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
     })
-    
+
     if (res.data.success) {
       logoMessage.value = 'Logo上传成功！'
       logoSuccess.value = true
@@ -234,10 +271,12 @@ const logout = async () => {
     router.push('/login')
   } catch (err) {
     console.error('退出登录失败:', err)
+    router.push('/login')
   }
 }
 
 onMounted(() => {
+  checkLogin()
   checkLogo()
 })
 </script>
@@ -410,6 +449,31 @@ onMounted(() => {
 .no-logo {
   color: #999;
   font-size: 14px;
+}
+
+.user-info-box {
+  padding: 30px;
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 15px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.info-item:last-child {
+  border-bottom: none;
+}
+
+.info-item .label {
+  font-weight: bold;
+  color: #333;
+}
+
+.info-item .value {
+  color: #667eea;
+  font-weight: bold;
 }
 
 .profile-footer {

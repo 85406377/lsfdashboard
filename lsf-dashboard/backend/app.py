@@ -560,19 +560,23 @@ def api_jobs():
 
 @app.route('/api/jobs/run')
 def api_run_jobs():
-    """获取Run状态作业列表，支持分页 - 使用当前登录用户"""
+    """获取所有状态的作业列表，支持分页 - 使用当前登录用户"""
     page = request.args.get('page', 1, type=int)
     page_size = request.args.get('pageSize', 50, type=int)
     
-    result = run_lsf_command('bjobs -w', use_session_user=True)
+    # admin用户查看所有作业
+    if is_admin():
+        result = run_lsf_command('bjobs -w -u all', use_session_user=False)
+    else:
+        # 非admin用户查看自己的作业
+        result = run_lsf_command('bjobs -w', use_session_user=True)
+    
     if result['success']:
         all_jobs = parse_bjobs(result['output'])
-        # 筛选RUN状态的作业
-        run_jobs = [j for j in all_jobs if j['status'] == 'RUN']
-        total = len(run_jobs)
+        total = len(all_jobs)
         start = (page - 1) * page_size
         end = start + page_size
-        page_data = run_jobs[start:end]
+        page_data = all_jobs[start:end]
         return jsonify({
             'success': True, 
             'data': page_data,
@@ -584,11 +588,17 @@ def api_run_jobs():
 
 @app.route('/api/jobs/all')
 def api_all_jobs():
-    """获取所有作业列表，支持分页 - 使用当前登录用户"""
+    """获取所有作业列表，支持分页 - 根据用户权限显示"""
     page = request.args.get('page', 1, type=int)
     page_size = request.args.get('pageSize', 50, type=int)
     
-    result = run_lsf_command('bjobs -w', use_session_user=True)
+    # admin用户查看所有作业
+    if is_admin():
+        result = run_lsf_command('bjobs -w -u all', use_session_user=False)
+    else:
+        # 非admin用户查看自己的作业
+        result = run_lsf_command('bjobs -w', use_session_user=True)
+    
     if result['success']:
         all_jobs = parse_bjobs(result['output'])
         total = len(all_jobs)
@@ -606,12 +616,17 @@ def api_all_jobs():
 
 @app.route('/api/history')
 def api_history():
-    """获取历史作业，支持分页 - 使用当前登录用户"""
+    """获取历史作业，支持分页 - 根据用户权限显示"""
     page = request.args.get('page', 1, type=int)
     page_size = request.args.get('pageSize', 50, type=int)
     
-    # 使用run_lsf_command自动处理-u参数
-    result = run_lsf_command('bhist -w', use_session_user=True)
+    # admin用户查看所有历史作业
+    if is_admin():
+        result = run_lsf_command('bhist -w -u all', use_session_user=False)
+    else:
+        # 非admin用户查看自己的历史作业
+        result = run_lsf_command('bhist -w', use_session_user=True)
+    
     if result['success']:
         all_jobs = parse_bhist(result['output'])
         total = len(all_jobs)

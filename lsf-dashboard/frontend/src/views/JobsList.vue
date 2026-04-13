@@ -4,7 +4,7 @@
     
     <div class="card">
       <div class="card-header">
-        <h2>🚀 Run状态作业列表</h2>
+        <h2>🚀 所有状态作业列表</h2>
         <span class="badge">{{ total }} 个作业</span>
       </div>
       <div class="card-body">
@@ -45,7 +45,7 @@
               </tr>
               <tr v-if="jobs.length === 0">
                 <td colspan="8" class="empty-message">
-                  暂无Run状态作业
+                  暂无作业
                 </td>
               </tr>
             </tbody>
@@ -94,7 +94,7 @@ const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
 const fetchJobs = async () => {
   loading.value = true
   try {
-    const res = await axios.get('/api/jobs/run', {
+    const res = await axios.get('/api/jobs/all', {
       params: { page: page.value, pageSize: pageSize.value }
     })
     if (res.data.success) {
@@ -102,7 +102,7 @@ const fetchJobs = async () => {
       total.value = res.data.total
     }
   } catch (error) {
-    console.error('获取Run作业列表失败:', error)
+    console.error('获取所有作业列表失败:', error)
   } finally {
     loading.value = false
   }

@@ -81,7 +81,8 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="job in jobs" :key="job.job_id">
+                <!-- 限制显示8条记录 -->
+                <tr v-for="(job, index) in jobs.slice(0, 8)" :key="index">
                   <td>
                     <router-link :to="'/job/' + job.job_id" class="job-link">
                       {{ job.job_id }}
@@ -100,6 +101,17 @@
                     <button @click="viewJob(job.job_id)" class="btn-view">详情</button>
                   </td>
                 </tr>
+                
+                <!-- 超过8条时显示更多作业链接 -->
+                <tr v-if="jobs.length > 8">
+                  <td colspan="7" class="job-more-link">
+                    <router-link to="/jobs" class="btn-view btn-more">
+                      更多作业
+                      <span class="more-count">（共{{ jobs.length }}个作业）</span>
+                    </router-link>
+                  </td>
+                </tr>
+                
                 <tr v-if="jobs.length === 0">
                   <td colspan="7" class="empty-message">
                     暂无作业数据（未安装 LSF 或无作业）
@@ -586,6 +598,29 @@ onMounted(async () => {
   font-size: 12px;
 }
 .btn-view:hover { background: #5568d3; }
+
+.job-more-link {
+  background: #f8f9fa;
+  padding: 15px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-top: 1px solid #e5e7eb;
+}
+
+.btn-more {
+  background: #ea4335;
+  padding: 10px 20px;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.more-count {
+  font-size: 12px;
+  opacity: 0.9;
+}
 
 .empty-message { text-align: center; color: #999; padding: 40px !important; }
 

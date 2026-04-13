@@ -4,7 +4,7 @@
     
     <div class="card">
       <div class="card-header">
-        <h2>📜 历史作业 (bhist)</h2>
+        <h2>📜 历史作业</h2>
         <span class="badge">{{ total }} 条记录</span>
       </div>
       <div class="card-body">

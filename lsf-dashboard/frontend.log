@@ -1,0 +1,5 @@
+
+> lsf-dashboard@1.0.0 dev
+> vite --host 0.0.0.0
+
+sh: line 1: /root/.openclaw/workspace/lsf-dashboard/frontend/node_modules/.bin/vite: Permission denied
