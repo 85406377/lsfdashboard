@@ -200,6 +200,19 @@ npm install
 - [ ] 添加更多图表类型
 - [ ] 支持多集群监控
 
+##离线安装：
+- [ ]创建了新的离线安装包lsf-dashboard-offline-package.tar.gz（48MB）
+- [ ]将安装包和更新的中文安装说明文档部署到工作区
+- [ ]安装包已包含：
+- [ ]所有必要的Python依赖包（Flask、Flask-CORS等）
+- [ ]Node.js 18.x运行时环境
+- [ ]完整的部署脚本和文档
+- [ ]支持离线安装和在线安装两种方式
+- [ ]您可以在目标服务器上通过以下步骤安装：
+- [ ]将安装包复制到目标服务器
+- [ ]解压安装包并运行./install-offline.sh
+- [ ]访问服务器IP:5002查看Dashboard
+
 ## License
 
 MIT License
