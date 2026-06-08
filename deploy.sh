@@ -1,56 +1,94 @@
 #!/bin/bash
+# deploy.sh — CentOS 7.9 部署脚本（需 root 权限）
+# 用法: sudo bash deploy.sh
 
-# LSF Dashboard GitHub 部署脚本
+set -e
 
-echo "=== LSF Dashboard GitHub 部署脚本 ==="
+APP_DIR="/opt/lsf-monitor"
+DATA_DIR="/var/lib/lsf-monitor"
+LOG_DIR="/var/log/lsf-monitor"
+RUN_USER="lsfmon"
+RUN_GROUP="lsf"
 
-# 1. 配置 Git 用户信息
-echo "1. 配置 Git 用户信息..."
-git config --global user.name "Jason Li"
-git config --global user.email "jasonli-dr@example.com"
+echo "=========================================="
+echo " LSF Monitor 部署脚本"
+echo "=========================================="
 
-# 2. 检查当前分支
-echo "2. 检查当前分支..."
-current_branch=$(git branch --show-current)
-echo "当前分支: $current_branch"
-
-# 3. 重命名分支为 main（如果需要）
-if [ "$current_branch" = "master" ]; then
-    echo "重命名分支从 master 到 main..."
-    git branch -M main
+# ── 1. 检查 python3 ──
+if ! command -v python3 &>/dev/null; then
+    echo "[ERROR] 未找到 python3，请先安装 Python 3"
+    exit 1
 fi
 
-# 4. 添加远程仓库（请替换为你的 GitHub 仓库 URL）
-echo "4. 请手动创建 GitHub 仓库后，将下面的 URL 替换为你的仓库地址"
-echo "例如：https://github.com/你的用户名/lsf-dashboard.git"
-echo "或者：git@github.com:你的用户名/lsf-dashboard.git"
-echo ""
-echo "执行以下命令添加远程仓库："
-echo "git remote add origin https://github.com/你的用户名/lsf-dashboard.git"
-echo ""
-echo "或者 SSH 方式："
-echo "git remote add origin git@github.com:你的用户名/lsf-dashboard.git"
-echo ""
+# ── 2. 检查 LSF 命令 ──
+for cmd in lsload busers; do
+    if ! command -v $cmd &>/dev/null; then
+        echo "[WARN] 未找到 '$cmd' 命令，请确认 LSF 客户端已安装且在 PATH 中"
+    fi
+done
 
-# 5. 推送代码
-echo "5. 推送代码到 GitHub..."
-echo "执行以下命令："
-echo "git push -u origin main"
+# ── 3. 创建运行用户（若不存在）─────────────────
+if ! id "$RUN_USER" &>/dev/null; then
+    echo "[STEP 1/6] 创建系统用户 '$RUN_USER'"
+    groupadd -f "$RUN_GROUP"
+    useradd -g "$RUN_GROUP" -d /home/"$RUN_USER" -s /sbin/nologin "$RUN_USER" 2>/dev/null || \
+    useradd -g "$RUN_GROUP" -s /sbin/nologin "$RUN_USER"
+else
+    echo "[STEP 1/6] 用户 '$RUN_USER' 已存在，跳过"
+fi
+
+# ── 4. 创建目录 ──
+echo "[STEP 2/6] 创建目录..."
+for d in "$APP_DIR" "$DATA_DIR" "$LOG_DIR"; do
+    if [ ! -d "$d" ]; then
+        mkdir -p "$d"
+        echo "  创建 $d"
+    fi
+done
+
+# ── 5. 拷贝文件 ──
+echo "[STEP 3/6] 拷贝项目文件..."
+# 已知脚本自身路径
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cp "$SCRIPT_DIR/collect.py"    "$APP_DIR/"
+cp "$SCRIPT_DIR/db.py"         "$APP_DIR/"
+cp "$SCRIPT_DIR/stats.py"      "$APP_DIR/"
+cp "$SCRIPT_DIR/config.json"   "$APP_DIR/"
+cp "$SCRIPT_DIR/requirements.txt" "$APP_DIR/"
+
+# ── 6. 安装依赖 ──
+echo "[STEP 4/6] 安装 Python 依赖..."
+pip3 install --quiet DBUtils 2>/dev/null || pip3 install DBUtils
+
+# ── 7. 目录权限 ──
+echo "[STEP 5/6] 设置权限..."
+chown -R "$RUN_USER:$RUN_GROUP" "$APP_DIR" "$DATA_DIR" "$LOG_DIR"
+chmod 755 "$APP_DIR/collect.py"
+chmod 755 "$APP_DIR/stats.py"
+chmod 644 "$APP_DIR/config.json"
+
+# ── 8. systemd ──
+SERVICE_FILE="/etc/systemd/system/lsf-monitor.service"
+echo "[STEP 6/6] 部署 systemd service..."
+if [ -f "$SCRIPT_DIR/lsf-monitor.service" ]; then
+    cp "$SCRIPT_DIR/lsf-monitor.service" "$SERVICE_FILE"
+    systemctl daemon-reload
+    systemctl enable lsf-monitor
+    echo "Service 已安装，可通过 'systemctl start lsf-monitor' 启动"
+else
+    echo "[WARN] 未找到 lsf-monitor.service，跳过 systemd 安装"
+    echo "       可手动使用: nohup python3 $APP_DIR/collect.py &"
+fi
 
 echo ""
-echo "=== 手动步骤 ==="
-echo "1. 登录 GitHub (https://github.com)"
-echo "2. 点击 '+' → 'New repository'"
-echo "3. Repository name: lsf-dashboard"
-echo "4. Description: IBM LSF 作业监控 Dashboard - Python + Vue + PyECharts"
-echo "5. 选择 Public/Private"
-echo "6. 不要勾选 'Add a README file'"
-echo "7. 点击 'Create repository'"
-echo "8. 复制上面的命令执行"
-
+echo "=========================================="
+echo " 部署完成！"
+echo "=========================================="
+echo "  配置目录: $APP_DIR"
+echo "  数据目录: $DATA_DIR"
+echo "  日志目录: $LOG_DIR"
 echo ""
-echo "=== 当前 Git 状态 ==="
-git status
-echo ""
-echo "=== 最近提交记录 ==="
-git log --oneline -5
+echo "  启动命令（systemd）: systemctl start lsf-monitor"
+echo "  查看日志: journalctl -u lsf-monitor -f"
+echo "  查询统计: python3 $APP_DIR/stats.py overview"
+echo "=========================================="

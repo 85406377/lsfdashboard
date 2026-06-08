@@ -1,0 +1,17 @@
+{
+  "db_path": "C:/workspace/lsf-monitor/lsf_monitor.db",
+  "log_path": "C:/workspace/lsf-monitor/collect.log",
+  "interval": 60,
+  "lsf_cmd_timeout": 10,
+  "dashboard_port": 5000,
+  "listen": "0.0.0.0",
+  "commands": {
+    "lsload": [
+      "lsload"
+    ],
+    "busers": [
+      "busers",
+      "all"
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+[Unit]
+Description=LSF Monitor Data Collector
+Documentation=https://github.com/your-org/lsf-monitor
+After=network.target lsf.boot
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/lsf-monitor/collect.py --config /opt/lsf-monitor/config.json
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+User=lsfmon
+Group=lsf
+
+# 安全加固
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/lsf-monitor /var/log/lsf-monitor
+
+[Install]
+WantedBy=multi-user.target

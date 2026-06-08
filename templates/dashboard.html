@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LSF Monitor</title>
+  <script src="/static/echarts.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: #f0f2f5;
+      color: #333;
+      font-size: 14px;
+    }
+    #topbar {
+      background: #1a73e8;
+      color: white;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      font-size: 16px;
+      font-weight: bold;
+    }
+    #topbar .brand { font-size: 17px; letter-spacing: 0.5px; }
+    #topbar .sub { font-size: 12px; opacity: 0.75; }
+    #ctrl-bar {
+      background: white;
+      padding: 10px 20px;
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      border-bottom: 1px solid #e0e0e0;
+      flex-wrap: wrap;
+    }
+    .ctrl-grp { display: flex; align-items: center; gap: 6px; }
+    .ctrl-lbl { font-size: 13px; font-weight: 600; color: #555; }
+    select, button {
+      font-family: inherit;
+      font-size: 13px;
+      padding: 5px 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: white;
+      cursor: pointer;
+    }
+    select { min-width: 130px; }
+    button.btn {
+      background: #1a73e8;
+      color: white;
+      border: none;
+      font-weight: 600;
+      padding: 6px 16px;
+    }
+    button.btn:hover { background: #1557b0; }
+    .ctrl-info { font-size: 12px; color: #888; margin-left: auto; }
+    #tab-bar {
+      background: white;
+      padding: 6px 20px 0;
+      border-bottom: 2px solid #e0e0e0;
+      display: flex;
+      gap: 2px;
+    }
+    .tab-btn {
+      background: white;
+      border: none;
+      border-bottom: 3px solid transparent;
+      padding: 8px 16px;
+      font-size: 13px;
+      cursor: pointer;
+      color: #666;
+      border-radius: 4px 4px 0 0;
+      transition: all 0.15s;
+    }
+    .tab-btn:hover { background: #f0f4ff; color: #1a73e8; }
+    .tab-btn.active { color: #1a73e8; border-bottom-color: #1a73e8; font-weight: 700; }
+    .tab-pan { display: none; padding: 16px 20px; }
+    .tab-pan.active { display: block; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 14px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    }
+    .card h3 { font-size: 13px; color: #222; margin-bottom: 8px; }
+    .card .sub { font-size: 11px; color: #888; margin-bottom: 6px; }
+    .chart { height: 260px; }
+    .full { grid-column: 1 / -1; }
+    #loading {
+      position: fixed; inset: 0;
+      background: rgba(255,255,255,.88);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; color: #555;
+      z-index: 9999;
+    }
+    .spin {
+      width: 30px; height: 30px;
+      border: 3px solid #e0e0e0;
+      border-top-color: #1a73e8;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    table { border-collapse: collapse; width: 100%; font-size: 12px; }
+    th { background: #f5f5f5; padding: 6px 10px; text-align: left; border: 1px solid #ddd; font-weight: 600; white-space: nowrap; }
+    td { padding: 5px 10px; border: 1px solid #ddd; }
+    tr:nth-child(even) td { background: #fafafa; }
+    .err-box {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      border-radius: 4px;
+      padding: 10px 16px;
+      font-size: 13px;
+      color: #856404;
+      margin-bottom: 12px;
+    }
+  </style>
+</head>
+<body>
+
+<div id="topbar">
+  <span class="brand">📊 LSF Dashboard</span>
+  <span class="sub">EDA</span>
+</div>
+
+<div id="ctrl-bar">
+  <div class="ctrl-grp">
+    <span class="ctrl-lbl">Period</span>
+    <select id="sel-period">
+      <option value="1h">Last 1 Hour</option>
+      <option value="24h" selected>Last 24 Hours</option>
+      <option value="7d">Last 7 Days</option>
+      <option value="30d">Last 30 Days</option>
+    </select>
+  </div>
+  <div class="ctrl-grp">
+    <span class="ctrl-lbl">Node</span>
+    <select id="sel-host"><option value="">-- All --</option></select>
+  </div>
+  <div class="ctrl-grp">
+    <span class="ctrl-lbl">User</span>
+    <select id="sel-user"><option value="">-- All --</option></select>
+  </div>
+  <button class="btn" id="btn-refresh">🔄 Refresh</button>
+  <span class="ctrl-info" id="ctrl-info"></span>
+</div>
+
+<div id="tab-bar">
+  <button class="tab-btn active" data-tab="overview">📋 Overview</button>
+  <button class="tab-btn" data-tab="host">🖥 Node Trend</button>
+  <button class="tab-btn" data-tab="user">👤 User Trend</button>
+  <button class="tab-btn" data-tab="daily">📅 Daily Report</button>
+</div>
+
+<!-- Overview -->
+<div id="pan-overview" class="tab-pan active">
+  <div class="grid-2">
+    <div class="card"><h3>UT% — All Nodes</h3><div class="chart" id="c-ov-ut"></div></div>
+    <div class="card"><h3>r1m — All Nodes</h3><div class="chart" id="c-ov-r1m"></div></div>
+    <div class="card"><h3>Node Status</h3><div class="chart" id="c-ov-status"></div></div>
+    <div class="card"><h3>Total RUN Jobs</h3><div class="chart" id="c-ov-run"></div></div>
+  </div>
+</div>
+
+<!-- Host Trend -->
+<div id="pan-host" class="tab-pan">
+  <div class="grid-2">
+    <div class="card"><h3>CPU UT% Ring</h3><div class="chart" id="c-host-ring-cpu"></div></div>
+    <div class="card"><h3>Memory &amp; Swap Ring</h3><div class="chart" id="c-host-ring-mem"></div></div>
+    <div class="card"><h3>CPU Load r1m &amp; r15m</h3><div class="chart" id="c-host-load"></div></div>
+    <div class="card"><h3>UT% &amp; Running Tasks</h3><div class="chart" id="c-host-ut-ls"></div></div>
+    <div class="card"><h3>Memory &amp; Swap (GB)</h3><div class="chart" id="c-host-mem"></div></div>
+    <div class="card"><h3>Hourly UT% Bar</h3><div class="chart" id="c-host-ut-bar"></div></div>
+  </div>
+</div>
+
+<!-- User Trend -->
+<div id="pan-user" class="tab-pan">
+  <div class="grid-2">
+    <div class="card"><h3>RUN &amp; PEND Jobs</h3><div class="chart" id="c-user-run"></div></div>
+    <div class="card"><h3>RUN vs Quota (MAX=50)</h3><div class="chart" id="c-user-quota"></div></div>
+    <div class="card full"><h3>Max RUN by Day</h3><div class="chart" id="c-user-run-bar"></div></div>
+  </div>
+</div>
+
+<!-- Daily Report -->
+<div id="pan-daily" class="tab-pan">
+  <div class="grid-2">
+    <div class="card"><h3>Node Avg UT% by Day</h3><div class="chart" id="c-daily-ut"></div></div>
+    <div class="card"><h3>Node Max r15m by Day</h3><div class="chart" id="c-daily-r15m"></div></div>
+    <div class="card"><h3>Node Busy Ratio by Day</h3><div class="sub">% samples where r15m &gt; 4</div><div class="chart" id="c-daily-busy"></div></div>
+    <div class="card"><h3>User Top RUN by Day</h3><div class="chart" id="c-daily-user-top"></div></div>
+    <div class="card full"><h3>User Daily Stats</h3><div style="overflow-x:auto" id="c-daily-tbl"></div></div>
+  </div>
+</div>
+
+<div id="loading"><div class="spin"></div>Loading...</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+var S = {
+  period:    "24h",
+  host:      "",
+  user:      "",
+  activeTab: "overview",
+  charts:    {},
+  loaded:    {},
+};
+
+// ── Init ───────────────────────────────────────────────────────────────────
+window.addEventListener("DOMContentLoaded", function() {
+  bindEvents();
+  loadSelectors();
+});
+
+function bindEvents() {
+  document.getElementById("btn-refresh").addEventListener("click", refreshAll);
+
+  document.getElementById("sel-period").addEventListener("change", function() {
+    S.period = this.value;
+    loadTab(S.activeTab);
+  });
+
+  document.getElementById("sel-host").addEventListener("change", function() {
+    S.host = this.value;
+    loadTab(S.activeTab);
+  });
+
+  document.getElementById("sel-user").addEventListener("change", function() {
+    S.user = this.value;
+    loadTab(S.activeTab);
+  });
+
+  document.querySelectorAll(".tab-btn").forEach(function(btn) {
+    btn.addEventListener("click", function() {
+      var name = this.getAttribute("data-tab");
+      switchTab(name);
+    });
+  });
+
+  window.addEventListener("resize", function() {
+    resizeCharts(S.activeTab);
+  });
+}
+
+// ── Tab switching ───────────────────────────────────────────────────────────
+function switchTab(name) {
+  if (S.activeTab === name) return;
+  document.querySelectorAll(".tab-btn").forEach(function(b) {
+    b.classList.remove("active");
+  });
+  document.querySelectorAll(".tab-pan").forEach(function(p) {
+    p.classList.remove("active");
+  });
+  document.querySelector('[data-tab="' + name + '"]').classList.add("active");
+  document.getElementById("pan-" + name).classList.add("active");
+  S.activeTab = name;
+  setTimeout(function() { resizeCharts(name); }, 25);
+  if (!S.loaded[name]) {
+    loadTab(name);
+  }
+}
+
+function resizeCharts(name) {
+  tabIds(name).forEach(function(id) {
+    if (S.charts[id]) S.charts[id].resize();
+  });
+}
+
+function tabIds(name) {
+  return {
+    overview: ["c-ov-ut","c-ov-r1m","c-ov-status","c-ov-run"],
+    host:     ["c-host-ring-cpu","c-host-ring-mem","c-host-load","c-host-ut-ls","c-host-mem","c-host-ut-bar"],
+    user:     ["c-user-run","c-user-quota","c-user-run-bar"],
+    daily:    ["c-daily-ut","c-daily-r15m","c-daily-busy","c-daily-user-top"],
+  }[name] || [];
+}
+
+// ── Load selectors ──────────────────────────────────────────────────────────
+function loadSelectors() {
+  Promise.all([
+    fetch("/api/hosts").then(function(r) { return r.json(); }),
+    fetch("/api/users").then(function(r) { return r.json(); }),
+  ]).then(function(results) {
+    var hosts = results[0];
+    var users = results[1];
+    fillSelect("sel-host", hosts);
+    fillSelect("sel-user", users);
+    if (hosts.length > 0) {
+      S.host = hosts[0];
+      document.getElementById("sel-host").value = hosts[0];
+    }
+    if (users.length > 0) {
+      S.user = users[0];
+      document.getElementById("sel-user").value = users[0];
+    }
+    loadTab("overview");
+  }).catch(function(e) {
+    console.error("loadSelectors error", e);
+    showErr("Failed to load hosts/users: " + e);
+    loadTab("overview");
+  });
+}
+
+function fillSelect(id, items) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  var html = '<option value="">-- All --</option>';
+  items.forEach(function(i) {
+    html += '<option value="' + i + '">' + i + '</option>';
+  });
+  el.innerHTML = html;
+}
+
+// ── Refresh ────────────────────────────────────────────────────────────────
+function refreshAll() {
+  S.period = document.getElementById("sel-period").value;
+  S.host   = document.getElementById("sel-host").value;
+  S.user   = document.getElementById("sel-user").value;
+  tabIds(S.activeTab).forEach(function(id) {
+    if (S.charts[id]) { S.charts[id].dispose(); delete S.charts[id]; }
+  });
+  S.loaded[S.activeTab] = false;
+  loadTab(S.activeTab);
+  setTimeout(function() { resizeCharts(S.activeTab); }, 50);
+}
+
+// ── Per-tab loaders ─────────────────────────────────────────────────────────
+function loadTab(name) {
+  showLoad(true);
+  S.loaded[name] = false;
+  if (name === "overview") {
+    var p = S.period;
+    Promise.all([
+      fetch("/api/overview_ut?period=" + p).then(function(r){return r.json();}),
+      fetch("/api/overview_r1m?period=" + p).then(function(r){return r.json();}),
+      fetch("/api/host_status?period=" + p).then(function(r){return r.json();}),
+      fetch("/api/overview_run?period=" + p).then(function(r){return r.json();}),
+    ]).then(function(results) {
+      drawOverview(results[0], results[1], results[2], results[3]);
+      finish(name);
+    }).catch(function(e){ finish(name, e); });
+  } else if (name === "host") {
+    if (!S.host) { finish(name, "No host selected"); return; }
+    var p = S.period;
+    Promise.all([
+      fetch("/api/host_agg/" + encodeURIComponent(S.host) + "?period=" + p).then(function(r){return r.json();}),
+      fetch("/api/host_ring/" + encodeURIComponent(S.host) + "?period=" + p).then(function(r){return r.json();}),
+    ]).then(function(results) {
+      drawHost(results[0], results[1]);
+      finish(name);
+    }).catch(function(e){ finish(name, e); });
+  } else if (name === "user") {
+    if (!S.user) { finish(name, "No user selected"); return; }
+    var p = S.period;
+    Promise.all([
+      fetch("/api/user_agg/" + encodeURIComponent(S.user) + "?period=" + p).then(function(r){return r.json();}),
+      fetch("/api/user_quota?period=30d").then(function(r){return r.json();}),
+    ]).then(function(results) {
+      drawUser(results[0], results[1]);
+      finish(name);
+    }).catch(function(e){ finish(name, e); });
+  } else if (name === "daily") {
+    var p = S.period;
+    Promise.all([
+      fetch("/api/daily_node?period=" + p).then(function(r){return r.json();}),
+      fetch("/api/daily_user?period=" + p).then(function(r){return r.json();}),
+    ]).then(function(results) {
+      drawDaily(results[0], results[1]);
+      finish(name);
+    }).catch(function(e){ finish(name, e); });
+  }
+}
+
+function finish(name, err) {
+  showLoad(false);
+  S.loaded[name] = true;
+  var info = document.getElementById("ctrl-info");
+  if (info) {
+    info.textContent = "—" + S.period + " | Node: " + (S.host || "all") + " | User: " + (S.user || "all");
+  }
+  if (err) {
+    showErr("Error: " + (err.message || err));
+  }
+}
+
+// ── Overiew renderers ──────────────────────────────────────────────────────
+function drawOverview(utRows, r1mRows, statusRows, runRows) {
+  var buckets = uniq(utRows.map(function(r){return r.bucket;}));
+  mkLine("c-ov-ut",    "UT% — All Nodes", buckets, {"Avg UT%":  utRows.map(function(r){return r.avg_ut;})} );
+  mkLine("c-ov-r1m",   "r1m — All Nodes", uniq(r1mRows.map(function(r){return r.bucket;})), {"Avg r1m": r1mRows.map(function(r){return r.avg_r1m;})});
+  mkPie( "c-ov-status","Node Status",     statusRows.map(function(r){return {name:r.status||"unknown", value:r.cnt};}));
+  mkLine("c-ov-run",   "Total RUN Jobs",  uniq(runRows.map(function(r){return r.bucket;})), {"Sum RUN": runRows.map(function(r){return r.total_run;})});
+}
+
+function drawHost(aggRows, ringData) {
+  if (!aggRows || !aggRows.length) return;
+  var buckets = aggRows.map(function(r){ return r.bucket || ""; });
+  mkLine("c-host-load",     "CPU Load r1m & r15m", buckets, {"r1m": aggRows.map(function(r){return r.avg_r1m;}), "r15m": aggRows.map(function(r){return r.avg_r15m;})});
+  mkLine("c-host-ut-ls",    "UT% & Running Tasks", buckets, {"UT%": aggRows.map(function(r){return r.avg_ut;}), "ls": aggRows.map(function(r){return r.avg_ls;})});
+  mkLine("c-host-mem",      "Memory & Swap (GB)",  buckets, {"mem GB": aggRows.map(function(r){return r.avg_mem;}), "swp GB": aggRows.map(function(r){return r.avg_swp;})});
+  mkBar("c-host-ut-bar",    "Hourly UT%", buckets, [{"name":"UT%","data":aggRows.map(function(r){return r.avg_ut;})}]);
+  if (ringData) {
+    mkPie("c-host-ring-cpu", "CPU UT% — " + S.host, [
+      {name:"Used " + ringData.cpu_used + "%", value: ringData.cpu_used},
+      {name:"Free " + ringData.cpu_free + "%", value: ringData.cpu_free},
+    ]);
+    mkPie("c-host-ring-mem", "Memory & Swap — " + S.host, [
+      {name:"Mem "  + ringData.mem_avg + " GB", value: ringData.mem_avg},
+      {name:"Swap " + ringData.swp_avg + " GB", value: ringData.swp_avg},
+    ]);
+  }
+}
+
+function drawUser(aggRows, quotaRows) {
+  if (aggRows && aggRows.length) {
+    var dayBuckets = uniq(aggRows.map(function(r){return (r.bucket||"").slice(0,10);}));
+    var tsBuckets  = aggRows.map(function(r){ return r.bucket || ""; });
+    mkLine("c-user-run", "RUN & PEND Jobs", tsBuckets, {
+      "RUN":  aggRows.map(function(r){return r.avg_run;}),
+      "PEND": aggRows.map(function(r){return r.avg_pend;}),
+    });
+    mkBar("c-user-run-bar", "Max RUN by Day", dayBuckets, [
+      {name:"Max RUN", data: dayBuckets.map(function(d){
+        var rows = aggRows.filter(function(r){return (r.bucket||"").slice(0,10)===d;});
+        return rows.length ? Math.max.apply(null, rows.map(function(r){return r.max_run||0;})) : 0;
+      })},
+      {name:"Avg RUN", data: dayBuckets.map(function(d){
+        var rows = aggRows.filter(function(r){return (r.bucket||"").slice(0,10)===d;});
+        return rows.length ? avg(rows.map(function(r){return r.avg_run||0;})) : 0;
+      })},
+    ]);
+  }
+  if (quotaRows && quotaRows.length) {
+    var top30 = quotaRows.slice(0, 30);
+    mkLine("c-user-quota", "Peak RUN — Top 30 Users (MAX=50)",
+      top30.map(function(r){return r.username;}),
+      {"Peak RUN": top30.map(function(r){return r.peak_run;})}
+    );
+  }
+}
+
+function drawDaily(nodeRows, userRows) {
+  if (!nodeRows || !nodeRows.length) return;
+  var days = uniq(nodeRows.map(function(r){return r.day;}));
+  mkLine("c-daily-ut",   "Avg UT% by Day",  days, {"Avg UT%":  days.map(function(d){var r=find(nodeRows,d);return r?r.avg_ut:null;})});
+  mkLine("c-daily-r15m", "Max r15m by Day", days, {"Max r15m": days.map(function(d){var r=find(nodeRows,d);return r?r.max_r15m:null;})});
+  mkBar("c-daily-busy", "Busy Ratio (r15m&gt;4) %", days, [
+    {name:"Busy%", data: days.map(function(d){
+      var r = find(nodeRows, d);
+      if (!r || !r.samples) return 0;
+      return parseFloat((r.busy_samples / r.samples * 100).toFixed(2));
+    })}
+  ]);
+  // Top users
+  var topUsers = {};
+  if (userRows && userRows.length) {
+    userRows.forEach(function(r) {
+      if (!topUsers[r.username]) topUsers[r.username] = {max_run:0, total_pend:0};
+      topUsers[r.username].max_run    = Math.max(topUsers[r.username].max_run, r.max_run||0);
+      topUsers[r.username].total_pend += r.total_pend||0;
+    });
+    var topList = Object.keys(topUsers).map(function(u){return [u, topUsers[u]];})
+      .sort(function(a,b){return b[1].max_run - a[1].max_run;}).slice(0,10);
+    mkBar("c-daily-user-top", "Top 10 Users by Peak RUN",
+      topList.map(function(item){return item[0];}),
+      [{name:"Peak RUN", data: topList.map(function(item){return item[1].max_run;})}]
+    );
+    // Table
+    var dum = {};
+    userRows.forEach(function(r) {
+      if (!dum[r.day]) dum[r.day] = {};
+      dum[r.day][r.username] = r;
+    });
+    var allDays   = Object.keys(dum).sort().slice(-14);
+    var allUsers  = uniq(userRows.map(function(r){return r.username;})).sort();
+    var tbl = document.getElementById("c-daily-tbl");
+    if (tbl) {
+      var h = "<table><thead><tr><th>Day</th><th>User</th><th>Max RUN</th><th>Avg RUN</th><th>Total PEND</th></tr></thead><tbody>";
+      allDays.forEach(function(day) {
+        allUsers.slice(0,8).forEach(function(u) {
+          var d = dum[day] && dum[day][u];
+          if (d) {
+            h += "<tr><td>"+day+"</td><td>"+u+"</td><td>"+d.max_run+"</td><td>"+(d.avg_run!=null?d.avg_run.toFixed(2):"-")+"</td><td>"+(d.total_pend||0)+"</td></tr>";
+          }
+        });
+      });
+      h += "</tbody></table>";
+      tbl.innerHTML = h;
+    }
+  }
+}
+
+// ── Chart helpers ───────────────────────────────────────────────────────────
+function mkChart(id) {
+  if (S.charts[id]) return S.charts[id];
+  var el = document.getElementById(id);
+  if (!el) return null;
+  S.charts[id] = echarts.init(el, "light");
+  return S.charts[id];
+}
+
+function mkLine(divId, title, xData, seriesDict) {
+  var chart = mkChart(divId);
+  if (!chart) return;
+  var series = Object.keys(seriesDict).map(function(name) {
+    return {
+      name: name,
+      type: "line",
+      data: seriesDict[name].map(function(v){return v==null?null:v;}),
+      smooth: true,
+      showSymbol: xData.length < 60,
+      lineStyle: {width: 2},
+    };
+  });
+  chart.setOption({
+    title:  {text: title, left: "left", textStyle: {fontSize: 13}},
+    tooltip: {trigger: "axis", formatter: function(params) {
+      var out = (params[0].name||"") + "<br/>";
+      params.forEach(function(p) {
+        if (p.value == null || isNaN(p.value)) return;
+        out += p.marker + " " + p.seriesName + ": " + fmt2(p.value) + "<br/>";
+      });
+      return out;
+    }},
+    legend: {top: 5, right: 10},
+    grid:   {left: "8%", right: "4%", bottom: "15%", top: "40px"},
+    xAxis:  {type: "category", data: xData, axisLabel: {
+      rotate: 30,
+      interval: function(index) {
+        var isHourly = S.period && /\d+h/i.test(S.period);
+        if (isHourly) return Math.max(0, Math.floor(xData.length/12)-1);
+        // Day/Month view with >= 24 points: show only every 24th (midnight)
+        if (xData.length >= 24) return (index % 24 !== 0) ? 1 : 0;
+        // Fewer points: auto-skip to avoid crowding
+        return Math.max(0, Math.floor(xData.length/10)-1);
+      },
+      formatter: function(v){
+        if (v.length >= 16) {
+          var hh = v.slice(11, 13);
+          if (S.period && /\d+h/i.test(S.period)) {
+            return v.slice(11, 16);   // HH:mm  for hourly periods
+          }
+          return hh === "00" ? v.slice(5, 10) : "";  // MM-DD at midnight, else hide
+        }
+        return v;  // YYYY-MM-DD (daily) or short labels pass through
+      },
+    }},
+    yAxis:  {type: "value"},
+    dataZoom: [{type:"inside",start:0,end:100},{type:"slider",start:0,end:100}],
+    series: series,
+  }, true);
+}
+
+function mkBar(divId, title, xData, seriesList) {
+  var chart = mkChart(divId);
+  if (!chart) return;
+  chart.setOption({
+    title:  {text: title, left: "left", textStyle: {fontSize: 13}},
+    tooltip: {trigger: "axis", formatter: function(params) {
+      var out = (params[0].name||"") + "<br/>";
+      params.forEach(function(p) {
+        if (p.value == null || isNaN(p.value)) return;
+        out += p.marker + " " + p.seriesName + ": " + fmt2(p.value) + "<br/>";
+      });
+      return out;
+    }},
+    legend: {top: 5, right: 10},
+    grid:   {left: "8%", right: "4%", bottom: "20%", top: "40px"},
+    xAxis:  {type: "category", data: xData, axisLabel: {
+      rotate: 30,
+      interval: function(index) {
+        var isHourly = S.period && /\d+h/i.test(S.period);
+        if (isHourly) return Math.max(0, Math.floor(xData.length/12)-1);
+        if (xData.length >= 24) return (index % 24 !== 0) ? 1 : 0;
+        return Math.max(0, Math.floor(xData.length/10)-1);
+      },
+      formatter: function(v){
+        if (v.length >= 16) {
+          var hh = v.slice(11, 13);
+          if (S.period && /\d+h/i.test(S.period)) {
+            return v.slice(11, 16);
+          }
+          return hh === "00" ? v.slice(5, 10) : "";
+        }
+        return v;
+      },
+    }},
+    yAxis:  {type: "value"},
+    dataZoom: [{type:"inside",start:0,end:100}],
+    series: seriesList.map(function(s) {
+      return {
+        name: s.name,
+        type: "bar",
+        data: (s.data||[]).map(function(v){return v==null?null:v;}),
+        barMaxWidth: 40,
+        label: {show: true, position: "top", fontSize: 10, formatter: function(p){return fmt2(p.value);}},
+      };
+    }),
+  }, true);
+}
+
+function mkPie(divId, title, data) {
+  var chart = mkChart(divId);
+  if (!chart) return;
+  chart.setOption({
+    title:  {text: title, left: "left", textStyle: {fontSize: 13}},
+    tooltip: {trigger: "item", formatter: "{b}: {c} ({d}%)"},
+    legend: {orient: "vertical", right: 10, top: "center"},
+    series: [{
+      type: "pie",
+      radius: ["35%", "65%"],
+      data: data,
+      label: {formatter: "{b}: {d}%", fontSize: 11},
+      emphasis: {itemStyle: {shadowBlur: 10, shadowColor: "rgba(0,0,0,.3)"}},
+    }],
+  }, true);
+}
+
+// ── Utilities ────────────────────────────────────────────────────────────────
+function uniq(arr) {
+  var seen = {}, out = [];
+  arr.forEach(function(v){if(!seen[v]){seen[v]=true;out.push(v);}});
+  return out;
+}
+function avg(arr) {
+  var n = arr.length;
+  return n ? arr.reduce(function(a,b){return a+b;},0)/n : 0;
+}
+function fmt2(v) {
+  if (v == null || isNaN(v)) return "-";
+  return Number(v).toFixed(2);
+}
+function find(rows, day) {
+  for (var i=0;i<rows.length;i++) if (rows[i].day===day) return rows[i];
+  return null;
+}
+function showLoad(v) {
+  var el = document.getElementById("loading");
+  if (el) el.style.display = v ? "flex" : "none";
+}
+function showErr(msg) {
+  console.error(msg);
+}
+</script>
+</body>
+</html>

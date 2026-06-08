@@ -1,222 +1,323 @@
-# IBM LSF 作业监控 Dashboard
-一个基于 Python + Vue + PyECharts 的 IBM LSF 作业监控系统。在LSF 主机或者节点机上运行，用系统用户和密码验证登录，用户可查看，管理个人的jobs。管理员admin可管理全部人员Jobs。 管理员帐号： 用户名: admin 密码: admin123
-<img width="467" height="563" alt="1" src="https://github.com/user-attachments/assets/fefdb849-e002-44da-bdbe-3077126b680b" />
-<img width="840" height="492" alt="2" src="https://github.com/user-attachments/assets/41db20a6-61d1-407b-a27c-23d78f208ce9" />
-<img width="849" height="508" alt="3" src="https://github.com/user-attachments/assets/241d3351-b4de-4b45-9021-e673af0d3e7f" />
-<img width="835" height="449" alt="4" src="https://github.com/user-attachments/assets/28492a51-2b64-41ed-a566-b73df35f42bf" />
+# LSF Dashboard
 
-## 功能特性
+**LSF Cluster Monitoring & Data Collector**
 
-- 📊 **实时监控**: 作业、主机、负载、用户、队列信息
-- 📈 **可视化图表**: 使用 PyECharts 生成负载趋势图
-- 🔍 **作业详情**: 查看作业详细信息
-- ⚔️ **作业管理**: 支持终止作业 (bkill)
-- 🔄 **自动刷新**: 每 30 秒自动更新数据
-- 📱 **响应式设计**: 适配各种屏幕尺寸
+Collects `lsload` and `busers all` output from LSF cluster nodes every minute, stores it in SQLite, and visualizes node load trends and user job statistics via a Flask-powered web dashboard.
 
-## 技术栈
+> Designed for **CentOS 7.9 + LSF 10+**. Commands run locally — no SSH required.
 
-### 后端
-- Python 2.7.5 (兼容)
-- Flask 1.1.4
-- Flask-CORS
+---
 
-### 前端
-- Vue 3
-- Vue Router
-- Pinia (状态管理)
-- ECharts 5 (图表库)
-- Axios
-- Vite (构建工具)
+## Features
 
-## 项目结构
+- **Automatic data collection** — every 60 s (configurable), directly via `subprocess`
+- **No SSH dependency** — runs on each node; nodes only need Python 3
+- **SQLite persistence** — lightweight, WAL-mode, concurrent-read safe
+- **Web dashboard** — Flask + ECharts, four tabs:
+  - *Overview* — global CPU, r1m, RUN jobs, node status
+  - *Node Trend* — per-node UT%, load, memory, swap
+  - *User Trend* — per-user RUN/PEND jobs over time
+  - *Daily Report* — daily aggregated stats + top-10 user table
+- **Flexible X-axis** — hourly periods show `HH:mm`; day/month periods show `MM-DD` at midnight
+- **systemd service** included — runs as dedicated `lsfmon` user, auto-restarts on failure
+- **Log rotation** — 10 MB max, 5 generations kept
+
+---
+
+## Architecture
 
 ```
-lsf-dashboard/
-├── backend/
-│   ├── app.py              # Flask 后端主程序
-│   └── requirements.txt    # Python 依赖
-├── frontend/
-│   ├── src/
-│   │   ├── views/
-│   │   │   ├── Dashboard.vue    # 主页面
-│   │   │   └── JobDetail.vue    # 作业详情页
-│   │   ├── store/
-│   │   │   └── index.js         # 状态管理
-│   │   ├── router/
-│   │   │   └── index.js         # 路由配置
-│   │   ├── App.vue
-│   │   └── main.js
-│   ├── package.json
-│   └── vite.config.js
-├── start.sh                # 启动脚本
-└── README.md
+┌─────────────────────────────────────────────────────┐
+│  Node A / Node B / Node C / ... (each runs)          │
+│                                                      │
+│  ┌──────────────┐   ┌──────────────┐               │
+│  │  collect.py  │   │ dashboard.py │               │
+│  │  (daemon)     │   │ (Flask :5000) │               │
+│  └──────────────┘   └──────────────┘               │
+│        ↓                     ↑                       │
+│  ┌──────────────┐   ┌──────────────┐               │
+│  │  SQLite DB   │   │   Browser    │               │
+│  │  lsf_mon.db  │←───│  Dashboard   │               │
+│  └──────────────┘   └──────────────┘               │
+└─────────────────────────────────────────────────────┘
 ```
 
-## 安装步骤
+Each node runs its own `collect.py` daemon writing to a shared SQLite file (NFS mount recommended) or local DB.
 
-### 1. 环境要求
-- Python 2.7.5 或 Python 3.x
-- Node.js 16+
-- npm 或 yarn
-- IBM LSF 环境 (需要 bjobs, bhosts, busers, bqueues, lsload 命令)
+---
 
-### 2. 安装后端依赖
+## File Structure
+
+```
+lsf-monitor/
+├── SPEC.md                 # Full technical specification
+├── README.md               # This file
+├── requirements.txt       # Python dependencies
+├── config.json            # Runtime configuration
+├── collect.py             # Data collection daemon
+├── dashboard.py           # Flask web dashboard
+├── db.py                  # Database operations
+├── gui.py                 # Optional standalone GUI
+├── web.py                 # Lightweight web server wrapper
+├── deploy.sh              # One-shot deployment script
+├── lsf-monitor.service    # systemd unit file
+├── run_collect.sh         # Non-systemd process supervisor
+├── static/                # ECharts JS bundle
+│   └── echarts.min.js
+└── templates/             # HTML templates
+    ├── dashboard.html     # Main dashboard (4 tabs)
+    ├── index.html        # Alternative entry point
+    └── debug.html        # Debug page
+```
+
+---
+
+## Requirements
+
+- **OS**: CentOS 7.9 (or compatible RHEL-based LSF node)
+- **Python**: 3.6+
+- **LSF**: 10.0+ (commands `lsload`, `busers` available in PATH)
+- **Python packages**: see `requirements.txt`
+
+```
+DBUtils>=3.0.0
+```
+
+All other dependencies are Python standard library only (`sqlite3`, `subprocess`, `logging`, `json`, `datetime`, `collections`, `flask`, `pyecharts`).
+
+---
+
+## Installation
+
+### 1. Prepare the system user and directories
 
 ```bash
-cd backend
-pip install -r requirements.txt
+# Run as root on the LSF node
+sudo useradd -r -s /sbin/nologin lsfmon
+
+sudo mkdir -p /opt/lsf-monitor
+sudo mkdir -p /var/lib/lsf-monitor
+sudo mkdir -p /var/log/lsf-monitor
+
+sudo chown -R lsfmon:lsfmon /opt/lsf-monitor
+sudo chown -R lsfmon:lsfmon /var/lib/lsf-monitor
+sudo chown -R lsfmon:lsfmon /var/log/lsf-monitor
 ```
 
-### 3. 安装前端依赖并构建
+### 2. Copy files
 
 ```bash
-cd ../frontend
-npm install
-npm run build
+# From your build machine
+scp -r lsf-monitor/ root@<node>:/opt/lsf-monitor/
 ```
 
-### 4. 启动服务
+### 3. Install Python dependencies
 
-方式一：使用启动脚本
 ```bash
-chmod +x start.sh
-./start.sh
+sudo pip3 install -r /opt/lsf-monitor/requirements.txt
 ```
 
-方式二：手动启动
+### 4. Configure (optional)
+
+Edit `/opt/lsf-monitor/config.json`:
+
+```json
+{
+  "db_path": "/var/lib/lsf-monitor/lsf_monitor.db",
+  "log_path": "/var/log/lsf-monitor/collect.log",
+  "interval": 60,
+  "lsf_cmd_timeout": 10,
+  "dashboard_port": 5000,
+  "listen": "0.0.0.0",
+  "commands": {
+    "lsload": ["lsload"],
+    "busers": ["busers", "all"]
+  }
+}
+```
+
+### 5. Start via systemd
+
 ```bash
-# 启动后端 (端口 5000)
-cd backend
-python app.py
-
-# 或者开发模式 (需要两个终端)
-# 终端 1 - 后端
-cd backend
-python app.py
-
-# 终端 2 - 前端开发服务器
-cd frontend
-npm run dev
+sudo cp /opt/lsf-monitor/lsf-monitor.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable lsf-monitor
+sudo systemctl start lsf-monitor
 ```
 
-## 访问地址
+### Or start without systemd
 
-启动后访问：http://localhost:5000
-
-开发模式访问：http://localhost:3000
-
-## 页面说明
-
-### 主页面 (Dashboard)
-
-顶部显示:
-- 用户名 + 主机名
-- busers RUN 值
-- 日期时间
-- 操作系统版本
-- 网络状态
-- 刷新按钮
-
-主要模块:
-1. **作业列表**: 显示所有作业，可点击查看详情
-2. **主机列表**: 显示计算节点状态
-3. **系统负载**: 柱状图显示各主机负载
-4. **用户列表**: 显示用户作业统计
-5. **队列列表**: 显示队列状态
-6. **负载趋势**: 折线图显示负载变化趋势
-
-### 作业详情页
-
-- 显示 `bjobs -l jobid` 的完整输出
-- 提供 Kill 按钮终止作业
-- 确认对话框防止误操作
-
-## API 接口
-
-| 接口 | 方法 | 说明 |
-|------|------|------|
-| /api/system-info | GET | 获取系统信息 |
-| /api/jobs | GET | 获取作业列表 |
-| /api/hosts | GET | 获取主机列表 |
-| /api/users | GET | 获取用户列表 |
-| /api/queues | GET | 获取队列列表 |
-| /api/load | GET | 获取负载信息 |
-| /api/load-trend | GET | 获取负载趋势 |
-| /api/job/<job_id> | GET | 获取作业详情 |
-| /api/kill/<job_id> | POST | 终止作业 |
-
-## 自定义配置
-
-### 修改端口
-
-编辑 `backend/app.py`:
-```python
-app.run(host='0.0.0.0', port=5000, debug=True)
-```
-
-### 修改刷新间隔
-
-编辑 `frontend/src/views/Dashboard.vue`:
-```javascript
-setInterval(async () => {
-  // ...
-}, 30000)  // 30 秒，单位毫秒
-```
-
-## 注意事项
-
-1. **LSF 环境**: 确保系统已安装 IBM LSF 并配置好环境变量
-2. **权限**: 确保运行用户有权限执行 LSF 命令
-3. **Python 2.7**: 虽然代码兼容 2.7.5，但建议使用 Python 3.x
-4. **安全**: 生产环境请关闭 debug 模式，添加认证机制
-
-## 故障排除
-
-### 命令执行失败
-检查 LSF 环境是否正确配置:
 ```bash
-which bjobs
-which bhosts
-bjobs -V
+sudo -u lsfmon bash /opt/lsf-monitor/run_collect.sh start
 ```
 
-### 前端构建失败
-清除 node_modules 重新安装:
+---
+
+## Dashboard
+
+Access at `http://<node-ip>:5000` (default port `5000`, configurable).
+
+### Tab: Overview
+Global view — average UT% of all nodes, average r1m, total RUN jobs across all users, and a pie chart of node status breakdown.
+
+### Tab: Node Trend
+Select a hostname from the dropdown to see that node's:
+- **CPU Load** — r1m & r15m line chart
+- **UT% & Running Tasks** — UT% and load scalar (ls)
+- **Memory & Swap** — in GB
+- **Hourly UT%** — bar chart
+- **CPU / Memory rings** — donut charts of current utilization
+
+### Tab: User Trend
+Select a username to see:
+- **RUN & PEND Jobs** — line chart over time
+- **Max RUN by Day** — bar chart (day-level aggregation)
+- **Peak RUN** — top 30 users bar chart
+
+### Tab: Daily Report
+- **Avg UT% by Day** — line chart
+- **Max r15m by Day** — line chart
+- **Busy Ratio** — percentage of samples where r15m > 4
+- **Top 10 Users by Peak RUN** — bar chart + table
+
+### Period Selector
+All charts respect the **Period** dropdown:
+
+| Period | X-axis format |
+|--------|--------------|
+| `1h`, `24h` | `HH:mm` — hour:minute timestamps |
+| `7d`, `30d` | `MM-DD` at midnight only — keeps the axis clean |
+
+---
+
+## API Reference
+
+All endpoints return JSON.
+
+### Lists
+
+```
+GET /api/hosts       → ["node001", "node002", ...]
+GET /api/users      → ["user001", "user002", ...]
+```
+
+### Node data
+
+```
+GET /api/host_ts/<hostname>?fields=r1m,r15m,ut,ls,mem&period=24h
+GET /api/host_agg/<hostname>?period=24h
+GET /api/overview_ut?period=24h&hostname=node001
+GET /api/overview_r1m?period=24h
+GET /api/host_status?period=24h
+GET /api/host_ring/<hostname>?period=24h
+```
+
+### User data
+
+```
+GET /api/user_agg/<username>?period=24h
+GET /api/user_quota?period=30d
+GET /api/overview_run?period=24h
+```
+
+### Daily aggregates
+
+```
+GET /api/daily_node?period=30d
+GET /api/daily_user?period=30d
+```
+
+---
+
+## Database Schema
+
+**File**: `/var/lib/lsf-monitor/lsf_monitor.db` (SQLite, WAL mode)
+
+### `lsload_snapshot`
+
+| Column     | Type    | Description                    |
+|-----------|---------|-------------------------------|
+| id         | INTEGER | Primary key (auto-increment)  |
+| hostname   | TEXT    | Node name                     |
+| type       | TEXT    | CPU type                      |
+| mem_total  | REAL    | Total memory (GB)             |
+| mem_free   | REAL    | Free memory (GB)              |
+| ut         | REAL    | CPU utilization (%)           |
+| io         | REAL    | IO utilization (%)            |
+| ls         | INTEGER | Load scalar                   |
+| it         | REAL    | Idle time (minutes)           |
+| num_users  | INTEGER | Number of active users         |
+| ts         | TEXT    | Timestamp (ISO 8601 UTC)       |
+
+Indexes: `(ts, hostname)`, `(hostname, ts)`
+
+### `busers_snapshot`
+
+| Column    | Type    | Description            |
+|----------|---------|------------------------|
+| id       | INTEGER | Primary key            |
+| username | TEXT    | User name              |
+| run      | INTEGER | Running jobs           |
+| ssusp    | INTEGER | SSUSP jobs             |
+| ususp    | INTEGER | USUSP jobs             |
+| rsv      | INTEGER | Reserved jobs          |
+| ts       | TEXT    | Timestamp (ISO 8601 UTC) |
+
+Indexes: `(ts, username)`, `(username, ts)`
+
+---
+
+## Data Retention
+
+Delete records older than 90 days to save space:
+
 ```bash
-rm -rf node_modules package-lock.json
-npm install
+sqlite3 /var/lib/lsf-monitor/lsf_monitor.db \
+  "DELETE FROM lsload_snapshot WHERE ts < datetime('now', '-90 days');" \
+  "DELETE FROM busers_snapshot WHERE ts < datetime('now', '-90 days');" \
+  "VACUUM;"
 ```
 
-### 端口被占用
-修改 `backend/app.py` 中的端口号
+---
 
-## 扩展功能建议
+## Troubleshooting
 
-- [ ] 添加用户认证
-- [ ] 添加作业提交功能
-- [ ] 添加邮件/消息通知
-- [ ] 添加历史数据持久化
-- [ ] 添加更多图表类型
-- [ ] 支持多集群监控
+**collect.py exits immediately with no output**
 
-##离线安装：
-- [ ]创建了新的离线安装包lsf-dashboard-offline-package.tar.gz（48MB）
-- [ ]将安装包和更新的中文安装说明文档部署到工作区
-- [ ]安装包已包含：
-- [ ]所有必要的Python依赖包（Flask、Flask-CORS等）
-- [ ]Node.js 18.x运行时环境
-- [ ]完整的部署脚本和文档
-- [ ]支持离线安装和在线安装两种方式
-- [ ]您可以在目标服务器上通过以下步骤安装：
-- [ ]将安装包复制到目标服务器
-- [ ]解压安装包并运行./install-offline.sh
-- [ ]访问服务器IP:5002查看Dashboard
+Check that LSF commands are in PATH:
+```bash
+which lsload busers
+lsload   # should print the load table
+```
+
+**Dashboard shows "no data"**
+
+Verify the DB file exists and is non-empty:
+```bash
+ls -lh /var/lib/lsf-monitor/lsf_monitor.db
+sqlite3 /var/lib/lsf-monitor/lsf_monitor.db "SELECT COUNT(*) FROM lsload_snapshot;"
+```
+
+**Permission denied on log file**
+
+Ensure the log directory is owned by `lsfmon`:
+```bash
+sudo chown -R lsfmon:lsfmon /var/log/lsf-monitor
+```
+
+**systemd service won't start**
+
+Check the journal:
+```bash
+sudo journalctl -u lsf-monitor -n 50 --no-pager
+```
+
+**Dashboard accessible but charts empty**
+
+The browser may be serving a cached `dashboard.html`. Hard-refresh (`Ctrl+Shift+R`) or disable cache in DevTools.
+
+---
 
 ## License
 
-MIT License
-
-## Author
-
-Created for IBM LSF monitoring and visualization.
+Internal use only. Built for HPC cluster operations.
