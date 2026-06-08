@@ -2,6 +2,12 @@
 
 **LSF Cluster Monitoring & Data Collector**
 
+<img width="1912" height="811" alt="image" src="https://github.com/user-attachments/assets/c4da813c-5215-4642-bda5-65b6d2d02920" />
+<img width="1912" height="948" alt="image" src="https://github.com/user-attachments/assets/e9a6249e-b23c-445a-9f88-edf1afd51418" />
+<img width="1912" height="809" alt="image" src="https://github.com/user-attachments/assets/ae5827f4-d6c4-4075-b442-a1fb06af8ac7" />
+<img width="1912" height="948" alt="image" src="https://github.com/user-attachments/assets/7c7d3ad6-54df-46ab-9f45-a9361d0740bc" />
+
+
 Collects `lsload` and `busers all` output from LSF cluster nodes every minute, stores it in SQLite, and visualizes node load trends and user job statistics via a Flask-powered web dashboard.
 
 > Designed for **CentOS 7.9 + LSF 10+**. Commands run locally — no SSH required.
